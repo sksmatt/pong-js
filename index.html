@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width">
+<title>Pong JS</title>
+<style>
+    body {
+        background: #222;
+        color:#fff;
+        font:16px "Monaco";
+        text-align:center;
+    }
+    #pong {
+        border:0.2em solid #fff;
+        height: 85vh;
+        margin:0 auto;
+        display:block;
+    }
+    #score1 {
+        margin-right: 10%;
+    }
+    div {
+        display: inline-block;
+    }
+</style>
+</head>
+<body>
+    <script>
+        window.onload = function() {
+
+            const ctx = pong.getContext("2d");
+
+            class Vec {
+                constructor(x, y) {
+                    this.x = x;
+                    this.y = y;
+                }
+            }
+
+            class Ball {
+                constructor() {
+                    this.size = 10;
+                    this.start = new Vec(
+                        (pong.width/2) - (this.size/2), 
+                        (pong.height/2) - (this.size/2)
+                    );
+                    this.pos = new Vec(0, 0);
+                    this.vel = new Vec(3, 3);
+                    this.color = "#e8544a";
+                }
+
+                collision(paddle) {
+                    if(
+                        (this.pos.x < paddle.pos.x + paddle.width) &&
+                        (this.pos.x > paddle.pos.x) &&
+                        (this.pos.y > paddle.pos.y) && 
+                        (this.pos.y < paddle.pos.y + paddle.height)
+                        ) {
+                        return true;
+                    }
+
+                    return false;
+                }
+
+                draw() {
+                    ctx.beginPath();
+                    ctx.fillStyle = this.color;
+                    ctx.arc(this.pos.x, this.pos.y,
+                        this.size/2, 0, 
+                        2 * Math.PI, false);
+                    ctx.fill();              
+                }
+
+                default() {
+                    this.pos = new Vec(this.start.x, this.start.y);
+                    this.vel = new Vec(3, 3);
+                }
+
+                update() {
+                    if(this.pos.y > pong.height || this.pos.y < 0) {
+                        this.vel.y = -this.vel.y;
+                    }
+
+                    this.pos.x += this.vel.x;
+                    this.pos.y += this.vel.y;
+                }
+
+                goal() {
+                    if(this.pos.x + this.size < 0) {
+                        return true;
+                    } else if (this.pos.x > pong.width) {
+                        return true;
+                    }
+                    return false;
+                }
+            }
+
+            class Paddle {
+
+                constructor(y) {
+                    this.width = 20;
+                    this.height = 120;
+                    this.start = new Vec(y, (pong.height/2) - (this.height/2));
+                    this.pos = new Vec(0,0);
+                    this.speed = 6;
+                    this.vel = this.score = 0;
+                    this.color = "#20bdef";
+
+                }
+
+                draw() {
+                    ctx.fillStyle = this.color;
+                    ctx.fillRect(this.pos.x, this.pos.y, this.width, this.height);
+                }
+
+                default() {
+                    this.pos = new Vec(this.start.x, this.start.y);
+                    this.vel = 0;
+                    this.speed = 5;
+                }
+
+                reset() {
+                    this.score = 0;
+                }
+
+                update() {
+                    this.pos.y += this.vel;
+                    if(this.pos.y < 0) {
+                        this.pos.y = 0;
+                    } else if (this.pos.y > pong.height - this.height) {
+                        this.pos.y = pong.height - this.height;
+                    }
+                }
+
+            }
+
+            class Game {
+
+                constructor() {
+                    this.increase = 0.2;
+                    this.step = 1/60;
+                    this.ball = new Ball();
+                    this.player = new Paddle(64);
+                    this.cpu = new Paddle(pong.width - 84);
+                    this.loop = this.loop.bind(this);
+                    this.counter = 0
+                    this.run();
+                }
+
+                draw() {
+                    ctx.fillStyle = "#000";
+                    ctx.fillRect(0, 0, pong.width, pong.height);
+
+                    this.player.draw();
+                    this.cpu.draw();
+                    this.ball.draw();
+                }
+
+                input() {
+                    document.addEventListener('keydown', e => {
+                     if(e.keyCode == 40 || e.keyCode == 83){
+                        this.player.vel = this.player.speed;
+                    } else if(e.keyCode == 38 || e.keyCode == 90 || e.keyCode == 87){
+                        this.player.vel = -this.player.speed;
+                    } else if(e.keyCode == 82) {
+                        this.reset();
+                        return;
+                    }
+                    if(!this.started) {
+                        this.started = true;
+                    }
+                });
+                    document.addEventListener('keyup', e => {
+                     if([40,83,38,90,87].indexOf(e.keyCode) > -1){
+                         this.player.vel = 0;
+                     }
+                 });
+                }
+
+                loop(time) {
+                    if(this.lastTime) {
+                        this.update((time - this.lastTime) / 1000);
+                        this.draw();
+                    }
+                    this.lastTime = time;
+                    window.requestAnimationFrame(this.loop);
+                }
+
+                reset() {
+                    score1.innerHTML = score2.innerHTML = 0;
+                    this.player.reset();
+                    this.cpu.reset();
+                    this.default();
+                }
+
+                default() {
+                    this.acc = this.lastTime = 0;
+                    this.ball.default();
+                    this.player.default();
+                    this.cpu.default();
+                    this.started = false;
+                }
+
+                processColission() {
+                    this.ball.vel.x = -this.ball.vel.x;
+                    this.ball.vel.x *= this.randIncrease();
+                    this.ball.vel.y *= this.randIncrease();
+                    if(this.cpu.speed < 10) {
+                        this.cpu.speed += 0.2;
+                    }
+                }
+
+                processGoal() {
+                    let reverse = false;
+                    if(this.ball.vel.x > 0) {
+                        this.player.score += 1 * 10;
+                        reverse = true;
+                    } else {
+                        this.cpu.score += 1 * 10;
+                    }
+                    this.default();
+                    if(reverse) {
+                        this.ball.vel.x = -this.ball.vel.x;
+                    }
+                }
+
+                randIncrease() {
+                    return Math.random() * (1.2 - 1.1) + 1.1;
+                }
+
+                run() {
+                    this.reset();
+                    this.input();
+                    this.loop();
+                }
+
+                simulate() {
+                    if(!this.started) return;
+
+                    this.ball.update();
+                    this.player.update();
+
+                    if(this.ball.pos.y < this.cpu.pos.y) {
+                        this.cpu.vel = -this.cpu.speed;
+                    } else if (this.ball.pos.y > this.cpu.pos.y) {
+                        this.cpu.vel = this.cpu.speed;
+                    }
+
+                    this.cpu.update();
+
+                    if(this.ball.goal()) {
+                        this.processGoal();
+                        this.updateScore();
+                    }
+
+                    if(this.ball.collision(this.player)) {
+                        this.processColission();
+                        this.ball.pos.x = this.player.pos.x + this.player.width;
+                    } else if(this.ball.collision(this.cpu)) {
+                        this.processColission();
+                        this.ball.pos.x = this.cpu.pos.x;
+                    }
+
+                }
+
+                update(dt) {
+                    this.acc += dt;
+                    while(this.acc > this.step) {
+                        this.simulate();
+                        this.acc -= this.step;
+                    }
+                }
+
+                updateScore() {
+                    score1.innerHTML = this.player.score;
+                    score2.innerHTML = this.cpu.score;
+                }
+
+            }
+
+            new Game();
+    }
+</script>
+<div id="score1">0</div> <div id="score2">0</div>
+<canvas id="pong" width="600px" height="400px"/>
